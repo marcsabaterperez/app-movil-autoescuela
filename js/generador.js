@@ -89,17 +89,33 @@ export async function generarRuta({ salida, zonas, candidatos, objetivoSeg, tolS
 
   // Con varias zonas marcadas, la ruta visita al menos otro municipio distinto al de salida
   // (el trayecto entre ciudades puede ir por autovía, que está permitido).
+  // Ese punto de "ancla" se elige entre los alcanzables con la duración pedida y no se quita al ajustar.
   const muniSalida = municipioDe(salida[0], salida[1], zonas);
   const otros = candidatos.filter((c) => c.municipio !== muniSalida);
-  if (zonas.length > 1 && otros.length) {
-    const munis = [...new Set(otros.map((c) => c.municipio))];
+  const dSalida = (c) => distM(salida, coords(c));
+  let alcanzables = otros.filter((c) => dSalida(c) <= objetivoSeg * 5);
+  if (!alcanzables.length) alcanzables = [...otros].sort((a, b) => dSalida(a) - dSalida(b)).slice(0, 5);
+  let ancla = null;
+  const elegirAncla = () => {
+    const libres = alcanzables.filter((c) => !vetados.has(c));
+    if (!libres.length) return null;
+    const munis = [...new Set(libres.map((c) => c.municipio))];
     const destino = munis[Math.floor(Math.random() * munis.length)];
-    const enDestino = otros.filter((c) => c.municipio === destino);
-    wps.push(enDestino[Math.floor(Math.random() * enDestino.length)]);
+    const enDestino = libres.filter((c) => c.municipio === destino);
+    return enDestino[Math.floor(Math.random() * enDestino.length)];
+  };
+  if (zonas.length > 1 && otros.length) {
+    ancla = elegirAncla();
+    if (ancla) wps.push(ancla);
     anadir(2, 800, 2500);
   } else {
     anadir(3, 1200, 3500);
   }
+  const quitarUltimo = (lista) => {
+    const i = lista.findLastIndex((c) => c !== ancla);
+    if (i >= 0) lista.splice(i, 1);
+    return i >= 0;
+  };
   // Fase 1: circuito optimizado por OSRM (sin repetir calles en lo posible).
   for (let it = 1; it <= MAX_ITER_CIRCUITO; it++) {
     if (!wps.length) anadir(2, 1000, 3000);
@@ -110,6 +126,7 @@ export async function generarRuta({ salida, zonas, candidatos, objetivoSeg, tolS
       const antes = wps.length;
       wps = wps.filter((c) => !vetados.has(c));
       if (wps.length === antes) break; // el problema es la propia salida
+      if (ancla && vetados.has(ancla)) { ancla = elegirAncla(); if (ancla) wps.unshift(ancla); }
       continue;
     }
     const { diff } = r;
@@ -123,7 +140,15 @@ export async function generarRuta({ salida, zonas, candidatos, objetivoSeg, tolS
       anadir(k, Math.min(800, maxD * 0.4), maxD);
       if (wps.length === antes) break; // no quedan puntos nuevos: fase 2
     } else {
-      wps.pop();
+      if (!quitarUltimo(wps)) {
+        // Solo queda el ancla y aun así sobra tiempo: se cambia por una más cercana a la salida.
+        const masCerca = alcanzables.filter((c) => !vetados.has(c) && dSalida(c) < dSalida(ancla) - 500);
+        if (!masCerca.length) break;
+        masCerca.sort((a, b) => dSalida(a) - dSalida(b));
+        ancla = masCerca[Math.floor(Math.random() * Math.min(5, masCerca.length))];
+        wps = [ancla];
+        continue;
+      }
       escala *= 0.5;
       if (-diff < 900) anadir(1, 400, Math.max(600, 2500 * escala));
     }
@@ -156,7 +181,7 @@ export async function generarRuta({ salida, zonas, candidatos, objetivoSeg, tolS
         const maxD = Math.max(700, Math.min(2500, 1500 * escala2));
         for (let i = 0; i < k; i++) paso(Math.min(600, maxD * 0.5), maxD);
       } else {
-        seq.pop();
+        quitarUltimo(seq);
         escala2 *= 0.5;
         if (-ultimo < 600) paso(300, Math.max(500, 1200 * escala2));
       }

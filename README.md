@@ -4,6 +4,8 @@ App web para generar rutas aleatorias de práctica para el examen práctico de m
 **Alcalá de Henares, Torrejón de Ardoz, Coslada y San Fernando de Henares**, con mapa,
 indicaciones paso a paso, navegación GPS con voz y exportación GPX.
 
+**Versión publicada (para el móvil):** https://marcsabaterperez.github.io/app-movil-autoescuela/
+
 ## Cómo abrirla en Windows
 
 Necesita un servidor web local (los módulos JS y los datos no cargan abriendo el `index.html` con doble clic).

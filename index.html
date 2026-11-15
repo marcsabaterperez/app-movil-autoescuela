@@ -14,14 +14,18 @@
 <body>
   <div id="app">
     <aside id="panel" aria-label="Panel de rutas">
-      <button id="asa" class="asa" aria-label="Mostrar u ocultar el panel"><span></span></button>
-      <header class="marca">
-        <img src="icono.svg" alt="" width="40" height="40">
-        <div>
-          <h1>PractiRuta Moto</h1>
-          <p>Rutas aleatorias para practicar el examen práctico</p>
-        </div>
-      </header>
+      <div id="panel-cabecera" class="panel-cabecera">
+        <button id="asa" class="asa" aria-label="Mostrar u ocultar el panel"><span></span></button>
+        <header class="marca">
+          <img src="icono.svg" alt="" width="40" height="40">
+          <div>
+            <h1>PractiRuta Moto</h1>
+            <p>Rutas aleatorias para practicar el examen práctico</p>
+          </div>
+        </header>
+      </div>
+
+      <div id="panel-contenido" class="panel-contenido">
 
       <section class="tarjeta" id="sec-config">
         <h2><span class="num">1</span>Zonas</h2>
@@ -107,6 +111,7 @@
         Practica siempre cumpliendo la normativa y con el móvil en un soporte: no lo manipules en marcha. Las duraciones son estimaciones sin tráfico.
         Mapa y datos © colaboradores de OpenStreetMap. Rutas: OSRM.
       </footer>
+      </div>
     </aside>
 
     <main id="zona-mapa">

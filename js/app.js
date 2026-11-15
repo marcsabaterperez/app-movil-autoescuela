@@ -5,6 +5,7 @@ import { filtrarCandidatos, generarRuta, construirRuta } from './generador.js';
 import { Navegador } from './navegacion.js';
 import { iconoManiobra, formatoDist, formatoDur } from './instrucciones.js';
 import { masCercano } from './osrm.js';
+import { crearHoja } from './hoja.js';
 
 const COLORES = {
   'Alcalá de Henares': '#e4572e',
@@ -46,7 +47,7 @@ const estado = {
 };
 window.practiruta = estado; // depuración
 
-let mapa, capasZona = {}, capaRuta, marcadorSalida, marcadorPos, circuloPrecision;
+let mapa, capasZona = {}, capaRuta, marcadorSalida, marcadorPos, circuloPrecision, hoja;
 
 // ---------- Utilidades de interfaz ----------
 let temporizadorAviso;
@@ -166,7 +167,7 @@ function construirConfig() {
     if (estado.modoSalida === 'mapa') {
       if (estado.puntoMapa) mapa.setView(estado.puntoMapa, Math.max(mapa.getZoom(), 16));
       if (window.innerWidth <= 760) {
-        $('#panel').classList.add('plegado');
+        hoja.plegar();
         aviso('Toca el mapa donde quieras empezar. Abre el panel para buscar una dirección.');
       }
     }
@@ -179,7 +180,6 @@ function construirConfig() {
   }));
   $('#sel-ajuste').addEventListener('change', (e) => { estado.ajuste = Number(e.target.value); });
   $('#btn-generar').addEventListener('click', generar);
-  $('#asa').addEventListener('click', () => $('#panel').classList.toggle('plegado'));
   actualizarSalida();
 }
 
@@ -384,7 +384,7 @@ function mostrarRuta(ruta, { inicial = false } = {}) {
     li.addEventListener('click', () => {
       mapa.setView(p.loc, 17);
       L.popup().setLatLng(p.loc).setContent(p.texto).openOn(mapa);
-      if (window.innerWidth <= 760) $('#panel').classList.add('plegado');
+      if (window.innerWidth <= 760) hoja.plegar();
     });
     ol.appendChild(li);
   });
@@ -587,6 +587,7 @@ function conectarAcciones() {
     aviso('No se han podido cargar los datos de las zonas. Abre la app desde un servidor web (ver README).', 10000);
     return;
   }
+  hoja = crearHoja($('#panel'), $('#panel-cabecera'));
   iniciarMapa();
   construirConfig();
   conectarAcciones();

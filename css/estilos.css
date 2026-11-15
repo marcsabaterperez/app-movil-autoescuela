@@ -45,9 +45,14 @@ button, select { font: inherit; color: inherit; }
 
 #app { display: flex; height: 100dvh; }
 #panel {
-  width: 390px; flex: none; overflow-y: auto; padding: 16px 16px 24px;
+  width: 390px; flex: none; overflow: hidden;
   background: var(--fondo); border-right: 1px solid var(--borde);
-  display: flex; flex-direction: column; gap: 14px; z-index: 1000;
+  display: flex; flex-direction: column; z-index: 1000;
+}
+.panel-cabecera { flex: none; padding: 16px 16px 0; }
+.panel-contenido {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 14px 16px 24px; display: flex; flex-direction: column; gap: 14px;
 }
 #zona-mapa { position: relative; flex: 1; min-width: 0; }
 #mapa { position: absolute; inset: 0; background: #dfe3ea; }
@@ -241,19 +246,27 @@ body.navegando .flotante { bottom: 150px; }
   #app { display: block; position: relative; }
   #zona-mapa { position: absolute; inset: 0; }
   #panel {
-    position: absolute; left: 0; right: 0; bottom: 0; width: auto; max-height: 58dvh; border-right: 0;
-    border-radius: 18px 18px 0 0; box-shadow: 0 -6px 24px rgba(20, 33, 61, 0.18); padding: 6px 16px 20px;
-    transition: max-height 0.25s;
+    position: absolute; left: 0; right: 0; bottom: 0; width: auto; height: 58dvh; border-right: 0;
+    border-radius: 18px 18px 0 0; box-shadow: 0 -6px 24px rgba(20, 33, 61, 0.18);
   }
-  #panel.plegado { max-height: 150px; overflow: hidden; }
-  .asa { display: block; border: 0; background: none; padding: 6px 0 2px; width: 100%; }
-  .asa span { display: block; width: 44px; height: 5px; border-radius: 3px; background: var(--borde); margin: 0 auto; }
+  #panel.animando { transition: height 0.25s ease; }
+  .panel-cabecera {
+    padding: 4px 16px 10px; touch-action: none; cursor: grab; user-select: none;
+    border-bottom: 1px solid transparent;
+  }
+  #panel:not(.plegado) .panel-cabecera { border-bottom-color: var(--borde); }
+  .panel-cabecera:active { cursor: grabbing; }
+  .panel-contenido { padding: 12px 16px 20px; }
+  .asa { display: block; border: 0; background: none; padding: 6px 0 6px; width: 100%; cursor: inherit; }
+  .asa span { display: block; width: 44px; height: 5px; border-radius: 3px; background: var(--texto-2); opacity: 0.5; margin: 0 auto; }
   .marca img { width: 32px; height: 32px; }
   .marca h1 { font-size: 18px; }
-  .flotante { bottom: calc(58dvh + 14px); }
-  #panel.plegado ~ #zona-mapa .flotante { bottom: 164px; }
+  .flotante { bottom: calc(var(--alto-panel, 58dvh) + 14px); }
+  /* Escala y aviso de OpenStreetMap siempre justo encima del panel */
+  .leaflet-bottom { bottom: var(--alto-panel, 58dvh); }
+  body.navegando .leaflet-bottom { bottom: 0; }
   .nav-texto strong { font-size: 24px; }
   .nav-texto span { font-size: 15.5px; }
   .nav-icono svg { width: 44px; height: 44px; }
-  .aviso { bottom: calc(58dvh + 14px); }
+  .aviso { bottom: calc(var(--alto-panel, 58dvh) + 14px); }
 }

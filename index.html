@@ -9,7 +9,21 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icono.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-  <link rel="stylesheet" href="css/estilos.css">
+  <!-- Versión de los ficheros: súbela (v=) en este fichero cada vez que se publiquen cambios,
+       para que el navegador no mezcle ficheros nuevos con otros guardados en caché. -->
+  <link rel="stylesheet" href="css/estilos.css?v=5">
+  <script type="importmap">
+    {
+      "imports": {
+        "./js/geo.js": "./js/geo.js?v=5",
+        "./js/generador.js": "./js/generador.js?v=5",
+        "./js/navegacion.js": "./js/navegacion.js?v=5",
+        "./js/instrucciones.js": "./js/instrucciones.js?v=5",
+        "./js/osrm.js": "./js/osrm.js?v=5",
+        "./js/hoja.js": "./js/hoja.js?v=5"
+      }
+    }
+  </script>
 </head>
 <body>
   <div id="app">
@@ -149,6 +163,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

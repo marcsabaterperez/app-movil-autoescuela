@@ -68,6 +68,12 @@ El código es una web estándar (HTML + JS + Leaflet), así que se puede empaque
 
 Alternativa inmediata: publicarla con HTTPS (por ejemplo GitHub Pages) y abrirla en Chrome del móvil; se puede "instalar" como app (incluye `manifest.webmanifest`).
 
+## Publicar cambios
+
+La web se publica sola en GitHub Pages con cada `git push` a `main`. Antes de subir cambios, aumenta el
+número de versión `v=` en `index.html` (hoja de estilos, mapa de importación y `app.js`): así los móviles
+descargan la versión nueva completa en vez de mezclarla con ficheros antiguos guardados en caché.
+
 ## Estructura
 
 ```

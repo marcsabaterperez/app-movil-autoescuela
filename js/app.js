@@ -76,15 +76,15 @@ const voz = {
 // ---------- Carga ----------
 async function cargarDatos() {
   const [geo, puntos] = await Promise.all([
-    fetch('data/municipios.geojson').then((r) => r.json()),
-    fetch('data/puntos.json').then((r) => r.json()),
+    fetch('data/municipios.geojson', { cache: 'no-cache' }).then((r) => r.json()),
+    fetch('data/puntos.json', { cache: 'no-cache' }).then((r) => r.json()),
   ]);
   estado.zonas = prepararZonas(geo);
   estado.puntos = puntos;
   estado.zonas.forEach((z) => estado.seleccion.add(z.nombre));
   // Rutas de ejemplo: se guardan como respuesta OSRM y se reconstruyen aquí, sin conexión.
   try {
-    const r = await fetch('data/rutas_ejemplo.json');
+    const r = await fetch('data/rutas_ejemplo.json', { cache: 'no-cache' });
     if (r.ok) {
       const crudas = await r.json();
       estado.ejemplos = crudas.map((e, i) => {

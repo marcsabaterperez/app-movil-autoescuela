@@ -63,7 +63,7 @@ El punto del centro de exámenes es el elemento de OpenStreetMap "Centro de Exá
 - **Servidores públicos gratuitos**: rutas con el servidor de demostración de OSRM y mapa con las teselas de OpenStreetMap.
   Sirven para pruebas, no para una app publicada (límites de uso).
 - **No son rutas oficiales de examen**: la DGT no publica sus recorridos. La app genera recorridos de práctica por las calles de esas zonas.
-- Datos de OSM descargados el 15/11/2026 (`data/`). Se pueden actualizar con los scripts usados.
+- Datos de OSM descargados el 15/11/2026 (`data/`). Se pueden regenerar con los scripts de `herramientas/` (ver su LEEME).
 
 ## Camino a Android
 

@@ -25,23 +25,32 @@ Después abre http://localhost:8850 en Chrome o Edge. Hace falta conexión a int
    "Seleccionar": tocas el mapa o buscas una dirección, y arrastras el marcador para afinar el punto exacto.
    La app indica en qué calle empezará la ruta.
 3. **Duración**: 30, 45, 60 o 90 min, con ajuste opcional por tráfico (+15 % / +30 %).
-4. **Generar**: crea una ruta circular (vuelve al punto de salida) sin salir de las zonas marcadas.
-5. **Resultado**: duración, km, nº de rotondas, giros a izquierda y derecha, incorporaciones,
-   carreteras usadas, reparto por municipio e indicaciones paso a paso.
-6. **Navegación**: sigue tu posición GPS, muestra la siguiente maniobra, avisa por voz en español,
+4. **Priorizar**: Rotondas, Stops y/o Cedas. La ruta pasa sobre todo por lo marcado (con varias marcadas,
+   cada tipo pesa lo mismo). Sin ninguna marcada, o con todas, no hay preferencia y se mezcla todo.
+   Si en las zonas hay pocas señales del tipo pedido (p. ej. stops solo en Coslada), entran todas en la
+   ruta y el tiempo restante se completa con otros puntos.
+5. **Generar**: crea una ruta circular (vuelve al punto de salida) sin salir de las zonas marcadas.
+6. **Resultado**: duración, km, nº de rotondas, stops y cedas cruzados de frente, giros a izquierda y
+   derecha, incorporaciones, carreteras usadas, reparto por municipio e indicaciones paso a paso.
+   Los stops y cedas del recorrido se marcan en el mapa.
+7. **Navegación**: sigue tu posición GPS, muestra la siguiente maniobra, avisa por voz en español,
    detecta si te sales de la ruta y mantiene la pantalla encendida. "Simular recorrido" la prueba sin moverte.
-7. **Guardar / GPX / Google Maps**: guarda rutas en el dispositivo, exporta GPX (OsmAnd, Wikiloc, etc.)
+8. **Guardar / GPX / Google Maps**: guarda rutas en el dispositivo, exporta GPX (OsmAnd, Wikiloc, etc.)
    o abre una versión aproximada en Google Maps (solo admite unos pocos puntos intermedios).
 
 La app trae una **ruta de ejemplo de 60 min** (sale y vuelve al Centro de exámenes DGT, pasa por Torrejón usando la A-2):
-60 min, 35,4 km, 67 rotondas. También está en `rutas/ruta_60min_centro_dgt.gpx`.
+60 min, 35,4 km, 67 rotondas y 10 cedas. También está en `rutas/ruta_60min_centro_dgt.gpx`.
 
 El punto del centro de exámenes es el elemento de OpenStreetMap "Centro de Exámenes DGT Alcalá de Henares"
 (Avenida de Europa, 40.48600, -3.38376).
 
 ## Cómo se genera la ruta
 
-- Puntos de paso reales: 396 rotondas y 34 cruces con semáforo de OSM dentro de los 4 municipios (`data/puntos.json`).
+- Puntos de paso reales de OSM dentro de los 4 municipios (`data/puntos.json`): 396 rotondas, 34 cruces con
+  semáforo, 69 stops y 361 cedas el paso en cruces (no se cuentan los de entrada a rotonda, que ya cubre "Rotondas").
+- Cada stop y ceda guarda hacia dónde mira la señal (según la etiqueta `direction` de OSM o, si no la tiene,
+  hacia el cruce más cercano). El router recibe ese sentido, así que la ruta se encuentra la señal de frente.
+  Se descartaron las señales que el router no puede alcanzar y abandonar en ese sentido.
 - Se eligen al azar con un "paseo aleatorio" desde la salida y el motor OSRM los ordena en un circuito óptimo.
 - Se añaden o quitan puntos hasta quedar a ±3 min de la duración pedida.
 - Cada tramo se comprueba contra los límites municipales; si uno se sale, se descarta ese punto.

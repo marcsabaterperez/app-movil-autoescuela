@@ -1,11 +1,11 @@
 // Generador de rutas aleatorias circulares de duración objetivo, sin salir de las zonas.
 //
-// Idea: se eligen puntos de paso reales (rotondas y semáforos de OSM) mediante un paseo
+// Idea: se eligen puntos de paso reales (rotondas, semáforos, stops y cedas de OSM) mediante un paseo
 // aleatorio desde la salida. OSRM ordena los puntos en un circuito óptimo y devuelve la
 // duración. Se añaden o quitan puntos hasta acercarse a la duración objetivo, y se descarta
 // cualquier punto cuyo tramo saque la ruta de las zonas seleccionadas.
 
-import { dentro, distM, municipioDe, M_POR_GRADO_LAT, mPorGradoLon } from './geo.js';
+import { dentro, distM, municipioDe, M_POR_GRADO_LAT, mPorGradoLon, rumbo, difAngulo, distASegmento } from './geo.js';
 import { viajeCircular, viajeOrdenado } from './osrm.js';
 import { textoManiobra } from './instrucciones.js';
 
@@ -22,27 +22,50 @@ export function filtrarCandidatos(puntos, zonas) {
   });
 }
 
-// Índices de entrada (0 = salida) de los puntos cuyos tramos salen de las zonas.
-function puntosQueSacanDeZona(resp, zonas) {
+// Stops y cedas por los que pasa la ruta en el sentido de la señal (a menos de 12 m y ±50°).
+export function senalesEnRuta(geometria, puntos) {
+  let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
+  for (const [la, lo] of geometria) {
+    if (la < minLat) minLat = la; if (la > maxLat) maxLat = la;
+    if (lo < minLon) minLon = lo; if (lo > maxLon) maxLon = lo;
+  }
+  const m = 0.0003, cerca = 0.0004; // ~30-40 m
+  const res = [];
+  for (const p of puntos) {
+    if ((p.tipo !== 'stop' && p.tipo !== 'ceda') || p.rumbo == null) continue;
+    if (p.lat < minLat - m || p.lat > maxLat + m || p.lon < minLon - m || p.lon > maxLon + m) continue;
+    const q = [p.lat, p.lon];
+    for (let i = 0; i < geometria.length - 1; i++) {
+      const a = geometria[i], b = geometria[i + 1];
+      if (Math.abs(a[0] - p.lat) > cerca && Math.abs(b[0] - p.lat) > cerca && (a[0] - p.lat) * (b[0] - p.lat) > 0) continue;
+      if (Math.abs(a[1] - p.lon) > cerca && Math.abs(b[1] - p.lon) > cerca && (a[1] - p.lon) * (b[1] - p.lon) > 0) continue;
+      if (a[0] === b[0] && a[1] === b[1]) continue;
+      if (distASegmento(q, a, b) <= 12 && difAngulo(rumbo(a, b), p.rumbo) <= 50) { res.push({ ...p, idx: i }); break; }
+    }
+  }
+  return res;
+}
+
+// Tramos que salen de las zonas: índices de entrada de sus extremos (0 = salida) y en qué
+// fracción del tramo se produce la primera salida.
+function tramosFueraDeZona(resp, zonas) {
   const n = resp.waypoints.length;
   const orden = new Array(n);
   resp.waypoints.forEach((w, i) => { orden[w.waypoint_index] = i; });
-  const malos = new Set();
+  const tramos = [];
   resp.trips[0].legs.forEach((leg, j) => {
-    const fuera = leg.steps.some((s) => s.geometry.coordinates.some((c) => !dentro(c[1], c[0], zonas, TOLERANCIA_BORDE_M)));
-    if (fuera) {
-      const destino = orden[(j + 1) % n];
-      malos.add(destino !== 0 ? destino : orden[j]);
-    }
+    const cs = leg.steps.flatMap((s) => s.geometry.coordinates);
+    const k = cs.findIndex((c) => !dentro(c[1], c[0], zonas, TOLERANCIA_BORDE_M));
+    if (k >= 0) tramos.push({ origen: orden[j], destino: orden[(j + 1) % n], frac: k / cs.length });
   });
-  return [...malos];
+  return tramos;
 }
 
 const MAX_ITER_CIRCUITO = 14;
 const MAX_ITER_VUELTAS = 10;
 const MAX_PUNTOS_CIRCUITO = 14;
 
-export async function generarRuta({ salida, zonas, candidatos, objetivoSeg, tolSeg = 180, onProgreso = () => {}, signal }) {
+export async function generarRuta({ salida, zonas, candidatos, obligatorios = [], objetivoSeg, tolSeg = 180, onProgreso = () => {}, signal }) {
   if (candidatos.length < 4) throw new Error('No hay suficientes puntos de paso en las zonas seleccionadas.');
   const vetados = new Set();
   let wps = [];
@@ -52,15 +75,41 @@ export async function generarRuta({ salida, zonas, candidatos, objetivoSeg, tolS
   const maxIter = MAX_ITER_CIRCUITO + MAX_ITER_VUELTAS;
 
   const coords = (c) => [c.lat, c.lon];
+  // Stops y cedas llevan su sentido para que la ruta se encuentre la señal de frente.
+  const conSentido = (c) => (c.rumbo != null ? [c.lat, c.lon, c.rumbo] : [c.lat, c.lon]);
 
   // Consulta OSRM y valida que no se sale de las zonas. Devuelve { malos } o { diff }.
   const evaluar = async (lista, ordenado) => {
     iter++;
     onProgreso({ it: iter, maxIter, n: lista.length, dur: mejor ? objetivoSeg - mejor.diff : null });
-    const puntos = [salida, ...lista.map(coords)];
-    const resp = ordenado ? await viajeOrdenado(puntos, signal) : await viajeCircular(puntos, signal);
-    const malos = puntosQueSacanDeZona(resp, zonas);
-    if (malos.length) return { malos };
+    const puntos = [salida, ...lista.map(conSentido)];
+    let resp;
+    try {
+      resp = ordenado ? await viajeOrdenado(puntos, signal) : await viajeCircular(puntos, signal);
+    } catch (e) {
+      if (e.codigo === 'NoSegment' && e.indice > 0 && e.indice <= lista.length) return { malos: [e.indice] };
+      if (e.codigo === 'NoTrips' || e.codigo === 'NoRoute') {
+        // Alguna señal con sentido obligatorio deja un punto sin salida: se descarta la última añadida.
+        let i = lista.map((c) => c.rumbo != null && !obligatorios.includes(c)).lastIndexOf(true);
+        if (i < 0) i = lista.map((c) => c.rumbo != null).lastIndexOf(true);
+        if (i >= 0) return { malos: [i + 1] };
+      }
+      throw e;
+    }
+    const tramos = tramosFueraDeZona(resp, zonas);
+    if (tramos.length) {
+      // Qué punto quitar de cada tramo que se sale: nunca la salida; antes un punto de relleno que un
+      // obligatorio o el ancla; entre dos iguales, el más cercano al lugar donde se sale.
+      const protegido = (i) => obligatorios.includes(lista[i - 1]) || lista[i - 1] === ancla;
+      const malos = new Set(tramos.map((t) => {
+        const extremos = [t.origen, t.destino].filter((i) => i !== 0);
+        if (extremos.length === 1) return extremos[0];
+        const libres = extremos.filter((i) => !protegido(i));
+        if (libres.length === 1) return libres[0];
+        return t.frac < 0.5 ? t.origen : t.destino;
+      }));
+      return { malos: [...malos] };
+    }
     const diff = objetivoSeg - resp.trips[0].duration;
     if (!mejor || Math.abs(diff) < Math.abs(mejor.diff)) mejor = { resp, wps: [...lista], diff };
     return { diff };
@@ -104,15 +153,19 @@ export async function generarRuta({ salida, zonas, candidatos, objetivoSeg, tolS
     const enDestino = libres.filter((c) => c.municipio === destino);
     return enDestino[Math.floor(Math.random() * enDestino.length)];
   };
+  // Puntos obligatorios (señales escasas que el usuario ha priorizado): entran desde el principio.
+  wps.push(...obligatorios);
   if (zonas.length > 1 && otros.length) {
     ancla = elegirAncla();
     if (ancla) wps.push(ancla);
     anadir(2, 800, 2500);
   } else {
-    anadir(3, 1200, 3500);
+    anadir(obligatorios.length ? 1 : 3, 1200, 3500);
   }
+  // Al recortar, se quitan antes los puntos normales; los obligatorios y el ancla, solo si no queda otra.
   const quitarUltimo = (lista) => {
-    const i = lista.findLastIndex((c) => c !== ancla);
+    let i = lista.findLastIndex((c) => c !== ancla && !obligatorios.includes(c));
+    if (i < 0) i = lista.findLastIndex((c) => c !== ancla);
     if (i >= 0) lista.splice(i, 1);
     return i >= 0;
   };

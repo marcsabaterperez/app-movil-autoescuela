@@ -11,16 +11,16 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <!-- Versión de los ficheros: súbela (v=) en este fichero cada vez que se publiquen cambios,
        para que el navegador no mezcle ficheros nuevos con otros guardados en caché. -->
-  <link rel="stylesheet" href="css/estilos.css?v=5">
+  <link rel="stylesheet" href="css/estilos.css?v=6">
   <script type="importmap">
     {
       "imports": {
-        "./js/geo.js": "./js/geo.js?v=5",
-        "./js/generador.js": "./js/generador.js?v=5",
-        "./js/navegacion.js": "./js/navegacion.js?v=5",
-        "./js/instrucciones.js": "./js/instrucciones.js?v=5",
-        "./js/osrm.js": "./js/osrm.js?v=5",
-        "./js/hoja.js": "./js/hoja.js?v=5"
+        "./js/geo.js": "./js/geo.js?v=6",
+        "./js/generador.js": "./js/generador.js?v=6",
+        "./js/navegacion.js": "./js/navegacion.js?v=6",
+        "./js/instrucciones.js": "./js/instrucciones.js?v=6",
+        "./js/osrm.js": "./js/osrm.js?v=6",
+        "./js/hoja.js": "./js/hoja.js?v=6"
       }
     }
   </script>
@@ -84,6 +84,10 @@
             <option value="0.3">+30 % (hora punta)</option>
           </select>
         </label>
+
+        <h2><span class="num">4</span>Priorizar</h2>
+        <div id="prioridades" class="chips"></div>
+        <p id="ayuda-prioridad" class="ayuda"></p>
         <button id="btn-generar" class="principal">Generar ruta aleatoria</button>
         <div id="progreso" class="progreso" hidden><div class="barra"><span></span></div><p></p></div>
       </section>
@@ -94,9 +98,11 @@
           <span id="etiqueta-ajuste" class="etiqueta"></span>
         </div>
         <div class="cifras">
-          <div><strong id="st-dur">-</strong><span>duración</span></div>
-          <div><strong id="st-dist">-</strong><span>distancia</span></div>
+          <div class="ancha"><strong id="st-dur">-</strong><span>duración</span></div>
+          <div class="ancha"><strong id="st-dist">-</strong><span>distancia</span></div>
           <div><strong id="st-rot">-</strong><span>rotondas</span></div>
+          <div><strong id="st-stop">-</strong><span>stops</span></div>
+          <div><strong id="st-ceda">-</strong><span>cedas</span></div>
           <div><strong id="st-izq">-</strong><span>giros izq.</span></div>
           <div><strong id="st-der">-</strong><span>giros dcha.</span></div>
           <div><strong id="st-inc">-</strong><span>incorporaciones</span></div>
@@ -163,6 +169,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script type="module" src="js/app.js?v=5"></script>
+  <script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>

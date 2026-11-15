@@ -10,6 +10,27 @@ export function distM(a, b) {
   return Math.hypot(x, y);
 }
 
+// Rumbo en grados (0 = norte, 90 = este) de a hacia b.
+export function rumbo(a, b) {
+  const r = Math.PI / 180;
+  const y = Math.sin((b[1] - a[1]) * r) * Math.cos(b[0] * r);
+  const x = Math.cos(a[0] * r) * Math.sin(b[0] * r) - Math.sin(a[0] * r) * Math.cos(b[0] * r) * Math.cos((b[1] - a[1]) * r);
+  return ((Math.atan2(y, x) / r) + 360) % 360;
+}
+
+export const difAngulo = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+// Distancia (m) del punto p al segmento a-b.
+export function distASegmento(p, a, b) {
+  const kx = mPorGradoLon(p[0]);
+  const ax = (a[1] - p[1]) * kx, ay = (a[0] - p[0]) * M_POR_GRADO_LAT;
+  const bx = (b[1] - p[1]) * kx, by = (b[0] - p[0]) * M_POR_GRADO_LAT;
+  const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+  let t = L ? -(ax * dx + ay * dy) / L : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
 export function prepararZonas(geojson) {
   return geojson.features.map((f) => {
     const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;

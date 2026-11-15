@@ -1,7 +1,7 @@
 // PractiRuta Moto: interfaz, mapa, generación, rutas guardadas y navegación GPS.
 
 import { prepararZonas, dentro, distM } from './geo.js';
-import { filtrarCandidatos, generarRuta, construirRuta } from './generador.js';
+import { filtrarCandidatos, generarRuta, construirRuta, senalesEnRuta } from './generador.js';
 import { Navegador } from './navegacion.js';
 import { iconoManiobra, formatoDist, formatoDur } from './instrucciones.js';
 import { masCercano } from './osrm.js';
@@ -28,6 +28,18 @@ const CENTRO_DGT = {
   punto: [40.4859968, -3.3837625],
 };
 
+// Señales que se pueden priorizar. Sin ninguna marcada (o con todas) la ruta mezcla de todo,
+// semáforos incluidos.
+const ICONO_ROTONDA = '<svg class="senal" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7.5" fill="#1d6fe0"/><circle cx="8" cy="8" r="3.2" fill="none" stroke="#fff" stroke-width="1.8"/></svg>';
+const ICONO_STOP = '<svg class="senal" viewBox="0 0 16 16" aria-hidden="true"><polygon points="5,0.5 11,0.5 15.5,5 15.5,11 11,15.5 5,15.5 0.5,11 0.5,5" fill="#d62839" stroke="#fff" stroke-width="1"/><rect x="3.5" y="7" width="9" height="2" rx="0.5" fill="#fff"/></svg>';
+const ICONO_CEDA = '<svg class="senal" viewBox="0 0 16 16" aria-hidden="true"><polygon points="1,2 15,2 8,15" fill="#fff" stroke="#d62839" stroke-width="2.2" stroke-linejoin="round"/></svg>';
+const PRIORIDADES = [
+  { clave: 'rotondas', nombre: 'Rotondas', tipos: ['rotonda'], color: '#1d6fe0', icono: ICONO_ROTONDA },
+  { clave: 'stops', nombre: 'Stops', tipos: ['stop'], color: '#d62839', icono: ICONO_STOP },
+  { clave: 'cedas', nombre: 'Cedas', tipos: ['ceda'], color: '#e08a00', icono: ICONO_CEDA },
+];
+const NOMBRE_TIPO = { rotonda: 'rotonda', semaforo: 'cruce con semáforo', stop: 'stop', ceda: 'ceda el paso' };
+
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 const estado = {
@@ -38,6 +50,7 @@ const estado = {
   puntoMapa: null,
   calleMapa: null,
   puntoGps: null,
+  prioridad: new Set(),
   duracionMin: 60,
   ajuste: 0,
   ruta: null,
@@ -179,8 +192,38 @@ function construirConfig() {
     estado.duracionMin = Number(b.dataset.dur);
   }));
   $('#sel-ajuste').addEventListener('change', (e) => { estado.ajuste = Number(e.target.value); });
+
+  const contPrioridad = $('#prioridades');
+  for (const pr of PRIORIDADES) {
+    const lbl = document.createElement('label');
+    lbl.className = 'chip';
+    lbl.style.setProperty('--c', pr.color);
+    lbl.innerHTML = `<input type="checkbox">${pr.icono}${pr.nombre}`;
+    lbl.querySelector('input').addEventListener('change', (e) => {
+      if (e.target.checked) estado.prioridad.add(pr.clave); else estado.prioridad.delete(pr.clave);
+      lbl.classList.toggle('activo', e.target.checked);
+      actualizarAyudaPrioridad();
+    });
+    contPrioridad.appendChild(lbl);
+  }
+  actualizarAyudaPrioridad();
   $('#btn-generar').addEventListener('click', generar);
   actualizarSalida();
+}
+
+// Prioridad efectiva: ninguna marcada o todas marcadas = sin preferencia (lista vacía).
+function prioridadActiva() {
+  if (estado.prioridad.size === 0 || estado.prioridad.size === PRIORIDADES.length) return [];
+  return PRIORIDADES.filter((p) => estado.prioridad.has(p.clave));
+}
+
+const listaNatural = (xs) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`);
+
+function actualizarAyudaPrioridad() {
+  const activas = prioridadActiva();
+  $('#ayuda-prioridad').textContent = activas.length
+    ? `La ruta pasará sobre todo por ${listaNatural(activas.map((p) => p.nombre.toLowerCase()))}. Los stops y cedas se cruzan siempre de frente, en el sentido de la señal.`
+    : 'Sin preferencia: la ruta mezcla rotondas, stops, cedas y semáforos. Marca una o dos opciones para darles prioridad.';
 }
 
 function puntoSalida() {
@@ -305,7 +348,30 @@ async function generar() {
   if (!salida) { aviso(estado.modoSalida === 'gps' ? 'Aún no tengo tu ubicación.' : 'Elige primero el punto de salida en el mapa.'); return; }
   if (!dentro(salida[0], salida[1], zonas, 30)) { aviso('El punto de salida está fuera de las zonas seleccionadas.'); return; }
 
-  const candidatos = filtrarCandidatos(estado.puntos, zonas);
+  // Puntos de paso según la prioridad. Si en las zonas marcadas hay muy pocos del tipo pedido,
+  // se completan con el resto para poder generar la ruta.
+  const activas = prioridadActiva();
+  let candidatos;
+  let obligatorios = [];
+  if (!activas.length) {
+    candidatos = filtrarCandidatos(estado.puntos, zonas);
+  } else {
+    const tipos = new Set(activas.flatMap((p) => p.tipos));
+    candidatos = filtrarCandidatos(estado.puntos.filter((p) => tipos.has(p.tipo)), zonas);
+    if (candidatos.length < 15) {
+      // Pocos del tipo pedido (p. ej. stops solo en Coslada): entran todos en la ruta
+      // y el tiempo que falte se completa con otros puntos.
+      obligatorios = candidatos;
+      candidatos = [...candidatos, ...filtrarCandidatos(estado.puntos.filter((p) => !tipos.has(p.tipo)), zonas)];
+      aviso(`Hay pocos ${listaNatural(activas.map((p) => p.nombre.toLowerCase()))} en las zonas marcadas: la ruta pasará por todos y se completará con otros puntos.`, 6000);
+    } else if (activas.length > 1) {
+      // Mismo peso para cada tipo marcado aunque haya muchos más de uno que de otro
+      // (p. ej. hay unas 6 rotondas por cada stop): se repiten los del tipo escaso en el sorteo.
+      const grupos = activas.map((p) => candidatos.filter((c) => p.tipos.includes(c.tipo))).filter((g) => g.length);
+      const mayor = Math.max(...grupos.map((g) => g.length));
+      candidatos = grupos.flatMap((g) => Array.from({ length: Math.max(1, Math.round(mayor / g.length)) }, () => g).flat());
+    }
+  }
   const ctrl = new AbortController();
   estado.generando = ctrl;
   const btn = $('#btn-generar');
@@ -318,7 +384,7 @@ async function generar() {
   pintar(4, 'Eligiendo puntos de paso al azar...');
   try {
     const ruta = await generarRuta({
-      salida, zonas, candidatos, objetivoSeg, tolSeg: Math.min(180, objetivoSeg * 0.05), signal: ctrl.signal,
+      salida, zonas, candidatos, obligatorios, objetivoSeg, tolSeg: Math.min(180, objetivoSeg * 0.05), signal: ctrl.signal,
       onProgreso: ({ it, maxIter, n, dur }) => pintar(Math.min(95, (it / maxIter) * 100),
         `Calculando circuito (intento ${it}, ${n} puntos de paso${dur ? `, ${formatoDur(dur * (1 + estado.ajuste))}` : ''})...`),
     });
@@ -326,6 +392,7 @@ async function generar() {
     ruta.objetivoMin = estado.duracionMin;
     ruta.zonas = zonas.map((z) => z.nombre);
     ruta.nombreSalida = nombreSalida();
+    ruta.prioridad = activas.map((p) => p.clave);
     ruta.nombre = `Ruta de ${estado.duracionMin} min desde ${ruta.nombreSalida}`;
     mostrarRuta(ruta);
     pintar(100, ruta.ajustada ? 'Ruta lista.' : 'Ruta lista, aunque no se ha podido ajustar del todo a la duración pedida.');
@@ -349,9 +416,21 @@ function mostrarRuta(ruta, { inicial = false } = {}) {
   const linea = ruta.geometria;
   L.polyline(linea, { color: '#ffffff', weight: 9, opacity: 0.9, interactive: false }).addTo(capaRuta);
   const pl = L.polyline(linea, { color: getComputedStyle(document.documentElement).getPropertyValue('--ruta').trim() || '#1d6fe0', weight: 5, opacity: 0.95 }).addTo(capaRuta);
+
+  // Stops y cedas que la ruta cruza de frente
+  const senales = senalesEnRuta(ruta.geometria, estado.puntos);
+  for (const s of senales) {
+    L.marker([s.lat, s.lon], {
+      icon: L.divIcon({ className: '', html: s.tipo === 'stop' ? ICONO_STOP : ICONO_CEDA, iconSize: [16, 16], iconAnchor: [8, 8] }),
+      zIndexOffset: -100, keyboard: false,
+    }).bindTooltip(`${s.tipo === 'stop' ? 'Stop' : 'Ceda el paso'}${s.nombre ? `: ${s.nombre}` : ''}`).addTo(capaRuta);
+  }
+  ruta.stats.stops = senales.filter((s) => s.tipo === 'stop').length;
+  ruta.stats.cedas = senales.filter((s) => s.tipo === 'ceda').length;
+
   ruta.puntosPaso.forEach((p, i) => {
     L.marker([p.lat, p.lon], { icon: L.divIcon({ className: '', html: `<div class="marcador-paso">${i + 1}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] }) })
-      .bindTooltip(`Punto ${i + 1}: ${p.tipo === 'rotonda' ? 'rotonda' : 'cruce con semáforo'}${p.nombre ? ` (${p.nombre})` : ''}, ${CORTO[p.municipio] || p.municipio}`)
+      .bindTooltip(`Punto ${i + 1}: ${NOMBRE_TIPO[p.tipo] || p.tipo}${p.nombre ? ` (${p.nombre})` : ''}, ${CORTO[p.municipio] || p.municipio}`)
       .addTo(capaRuta);
   });
   L.marker([ruta.salida.lat, ruta.salida.lon], { icon: L.divIcon({ className: '', html: '<div class="marcador-salida">S</div>', iconSize: [30, 30], iconAnchor: [15, 15] }), zIndexOffset: 1000 })
@@ -361,10 +440,15 @@ function mostrarRuta(ruta, { inicial = false } = {}) {
   const durMostrada = ruta.duracion * (1 + (ruta.ajuste || 0));
   $('#sec-ruta').hidden = false;
   $('#titulo-ruta').textContent = ruta.nombre || 'Tu ruta';
-  $('#etiqueta-ajuste').textContent = ruta.ajuste ? `incluye +${Math.round(ruta.ajuste * 100)} % tráfico` : 'sin tráfico';
+  const prioridadTexto = (ruta.prioridad || []).length
+    ? ` · prioriza ${listaNatural(ruta.prioridad.map((k) => PRIORIDADES.find((p) => p.clave === k).nombre.toLowerCase()))}`
+    : '';
+  $('#etiqueta-ajuste').textContent = (ruta.ajuste ? `incluye +${Math.round(ruta.ajuste * 100)} % tráfico` : 'sin tráfico') + prioridadTexto;
   $('#st-dur').textContent = formatoDur(durMostrada);
   $('#st-dist').textContent = formatoDist(ruta.distancia);
   $('#st-rot').textContent = ruta.stats.rotondas;
+  $('#st-stop').textContent = ruta.stats.stops;
+  $('#st-ceda').textContent = ruta.stats.cedas;
   $('#st-izq').textContent = ruta.stats.izquierda;
   $('#st-der').textContent = ruta.stats.derecha;
   $('#st-inc').textContent = ruta.stats.incorporaciones;

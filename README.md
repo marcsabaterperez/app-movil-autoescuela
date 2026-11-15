@@ -21,7 +21,9 @@ Después abre http://localhost:8850 en Chrome o Edge. Hace falta conexión a int
 
 1. **Zonas**: los 4 municipios, con sus límites oficiales de OpenStreetMap. Puedes marcar uno o varios.
    Con varias zonas, la ruta pasa por al menos dos municipios (el tramo entre ciudades puede ir por autovía).
-2. **Salida**: centro del municipio, tu ubicación GPS o un punto que toques en el mapa.
+2. **Salida**: Centro de exámenes DGT (Av. Europa, 6, 28806 Alcalá de Henares), tu ubicación GPS o
+   "Seleccionar": tocas el mapa o buscas una dirección, y arrastras el marcador para afinar el punto exacto.
+   La app indica en qué calle empezará la ruta.
 3. **Duración**: 30, 45, 60 o 90 min, con ajuste opcional por tráfico (+15 % / +30 %).
 4. **Generar**: crea una ruta circular (vuelve al punto de salida) sin salir de las zonas marcadas.
 5. **Resultado**: duración, km, nº de rotondas, giros a izquierda y derecha, incorporaciones,
@@ -31,8 +33,11 @@ Después abre http://localhost:8850 en Chrome o Edge. Hace falta conexión a int
 7. **Guardar / GPX / Google Maps**: guarda rutas en el dispositivo, exporta GPX (OsmAnd, Wikiloc, etc.)
    o abre una versión aproximada en Google Maps (solo admite unos pocos puntos intermedios).
 
-La app trae una **ruta de ejemplo de 60 min** (salida en el centro de Alcalá, pasa por Torrejón usando la A-2):
-59 min, 40,6 km, 58 rotondas. También está en `rutas/ruta_60min_alcala_torrejon.gpx`.
+La app trae una **ruta de ejemplo de 60 min** (sale y vuelve al Centro de exámenes DGT, pasa por Torrejón usando la A-2):
+60 min, 35,4 km, 67 rotondas. También está en `rutas/ruta_60min_centro_dgt.gpx`.
+
+El punto del centro de exámenes es el elemento de OpenStreetMap "Centro de Exámenes DGT Alcalá de Henares"
+(Avenida de Europa, 40.48600, -3.38376).
 
 ## Cómo se genera la ruta
 

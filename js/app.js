@@ -1,9 +1,10 @@
 // PractiRuta Moto: interfaz, mapa, generación, rutas guardadas y navegación GPS.
 
-import { prepararZonas, dentro } from './geo.js';
+import { prepararZonas, dentro, distM } from './geo.js';
 import { filtrarCandidatos, generarRuta, construirRuta } from './generador.js';
 import { Navegador } from './navegacion.js';
 import { iconoManiobra, formatoDist, formatoDur } from './instrucciones.js';
+import { masCercano } from './osrm.js';
 
 const COLORES = {
   'Alcalá de Henares': '#e4572e',
@@ -19,14 +20,22 @@ const CORTO = {
 };
 const CLAVE_RUTAS = 'practiruta.rutas.v1';
 
+// Coordenadas del elemento de OpenStreetMap "Centro de Exámenes DGT Alcalá de Henares" (Avenida de Europa).
+const CENTRO_DGT = {
+  nombre: 'Centro de exámenes DGT',
+  direccion: 'Av. Europa, 6, 28806 Alcalá de Henares, Madrid',
+  punto: [40.4859968, -3.3837625],
+};
+
 const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 const estado = {
   zonas: [],
   seleccion: new Set(),
   puntos: [],
-  modoSalida: 'centro',
-  muniSalida: 'Alcalá de Henares',
+  modoSalida: 'dgt',
   puntoMapa: null,
+  calleMapa: null,
   puntoGps: null,
   duracionMin: 60,
   ajuste: 0,
@@ -98,6 +107,7 @@ function encuadrar(limites, animar = true) {
 
 function iniciarMapa() {
   mapa = L.map('mapa', { zoomControl: false, preferCanvas: true }).setView([40.455, -3.43], 12);
+  mapa.attributionControl.setPrefix(false); // sin el enlace "Leaflet"; se mantiene el aviso obligatorio de OpenStreetMap
   L.control.zoom({ position: 'topright' }).addTo(mapa);
   // Prototipo: teselas estándar de OpenStreetMap. Producción: proveedor con licencia de uso intensivo.
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -114,10 +124,7 @@ function iniciarMapa() {
 
   mapa.on('click', (e) => {
     if (estado.modoSalida !== 'mapa' || estado.nav) return;
-    const p = [e.latlng.lat, e.latlng.lng];
-    if (!dentro(p[0], p[1], zonasSeleccionadas())) { aviso('Ese punto está fuera de las zonas seleccionadas.'); return; }
-    estado.puntoMapa = p;
-    actualizarSalida();
+    fijarPuntoMapa([e.latlng.lat, e.latlng.lng]);
   });
 }
 
@@ -143,20 +150,29 @@ function construirConfig() {
       if (e.target.checked) estado.seleccion.add(z.nombre); else estado.seleccion.delete(z.nombre);
       lbl.classList.toggle('activo', e.target.checked);
       capasZona[z.nombre].setStyle(estiloZona(z.nombre));
-      actualizarSelectorCentro();
       actualizarSalida();
     });
     cont.appendChild(lbl);
   }
-  actualizarSelectorCentro();
 
   document.querySelectorAll('[data-salida]').forEach((b) => b.addEventListener('click', () => {
-    document.querySelectorAll('[data-salida]').forEach((x) => x.classList.toggle('activo', x === b));
+    document.querySelectorAll('[data-salida]').forEach((x) => {
+      x.classList.toggle('activo', x === b);
+      x.setAttribute('aria-checked', String(x === b));
+    });
     estado.modoSalida = b.dataset.salida;
     if (estado.modoSalida === 'gps') pedirGps();
+    if (estado.modoSalida === 'dgt') mapa.setView(CENTRO_DGT.punto, Math.max(mapa.getZoom(), 15));
+    if (estado.modoSalida === 'mapa') {
+      if (estado.puntoMapa) mapa.setView(estado.puntoMapa, Math.max(mapa.getZoom(), 16));
+      if (window.innerWidth <= 760) {
+        $('#panel').classList.add('plegado');
+        aviso('Toca el mapa donde quieras empezar. Abre el panel para buscar una dirección.');
+      }
+    }
     actualizarSalida();
   }));
-  $('#sel-centro').addEventListener('change', (e) => { estado.muniSalida = e.target.value; actualizarSalida(); });
+  $('#form-buscar').addEventListener('submit', (e) => { e.preventDefault(); buscarDireccion($('#txt-buscar').value); });
   document.querySelectorAll('[data-dur]').forEach((b) => b.addEventListener('click', () => {
     document.querySelectorAll('[data-dur]').forEach((x) => x.classList.toggle('activo', x === b));
     estado.duracionMin = Number(b.dataset.dur);
@@ -167,41 +183,107 @@ function construirConfig() {
   actualizarSalida();
 }
 
-function actualizarSelectorCentro() {
-  const sel = $('#sel-centro');
-  const zonas = zonasSeleccionadas();
-  sel.innerHTML = zonas.map((z) => `<option value="${z.nombre}">Centro de ${z.nombre}</option>`).join('');
-  if (!zonas.some((z) => z.nombre === estado.muniSalida) && zonas.length) estado.muniSalida = zonas[0].nombre;
-  sel.value = estado.muniSalida;
-}
-
 function puntoSalida() {
-  if (estado.modoSalida === 'centro') {
-    const z = estado.zonas.find((x) => x.nombre === estado.muniSalida);
-    return z ? z.centro : null;
-  }
+  if (estado.modoSalida === 'dgt') return CENTRO_DGT.punto;
   if (estado.modoSalida === 'gps') return estado.puntoGps;
   return estado.puntoMapa;
 }
 
 function nombreSalida() {
-  if (estado.modoSalida === 'centro') return `centro de ${CORTO[estado.muniSalida] || estado.muniSalida}`;
+  if (estado.modoSalida === 'dgt') return 'el centro de exámenes DGT';
   if (estado.modoSalida === 'gps') return 'mi ubicación';
-  return 'punto elegido en el mapa';
+  return (estado.calleMapa && estado.calleMapa.nombre) || 'el punto elegido';
 }
 
+const iconoSalida = (clase = '') => L.divIcon({ className: '', html: `<div class="marcador-salida ${clase}">S</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+
 function actualizarSalida() {
-  $('#sel-centro').hidden = estado.modoSalida !== 'centro';
+  const modo = estado.modoSalida;
+  $('#selector-salida').hidden = modo !== 'mapa';
+  mapa.getContainer().classList.toggle('seleccionando', modo === 'mapa');
   const info = $('#info-salida');
   const p = puntoSalida();
-  if (estado.modoSalida === 'mapa' && !p) info.textContent = 'Toca el mapa dentro de una zona para fijar la salida.';
-  else if (estado.modoSalida === 'gps' && !p) info.textContent = 'Buscando tu ubicación...';
-  else if (estado.modoSalida === 'gps') info.textContent = dentro(p[0], p[1], zonasSeleccionadas(), 30) ? 'Saldrás desde tu ubicación actual.' : 'Tu ubicación está fuera de las zonas seleccionadas.';
-  else info.textContent = '';
+  const fuera = p && !dentro(p[0], p[1], zonasSeleccionadas(), 30);
+  let html;
+  if (modo === 'dgt') html = '';
+  else if (modo === 'gps') html = p ? 'Ubicación obtenida. La ruta empezará donde estás.' : 'Buscando tu ubicación...';
+  else if (!p) html = 'Toca el mapa donde quieras empezar o busca una dirección. Después puedes arrastrar el marcador para afinar el punto.';
+  else {
+    const c = estado.calleMapa;
+    const calle = c ? `<strong>${esc(c.nombre || 'Calle sin nombre')}</strong>` : '<strong>Buscando la calle...</strong>';
+    const aviso = c && c.distancia > 25 ? `<br>La ruta empezará en la calle más cercana, a ${Math.round(c.distancia)} m.` : '';
+    html = `${calle}${aviso}<br>Arrastra el marcador naranja para ajustar el punto exacto.`;
+  }
+  if (fuera) html += '<br>Está fuera de las zonas seleccionadas.';
+  info.innerHTML = html;
+  info.classList.toggle('error', !!fuera);
+
   if (marcadorSalida) { marcadorSalida.remove(); marcadorSalida = null; }
-  if (p && !estado.ruta) {
-    marcadorSalida = L.marker(p, { icon: L.divIcon({ className: '', html: '<div class="marcador-salida">S</div>', iconSize: [30, 30], iconAnchor: [15, 15] }) })
-      .addTo(mapa).bindTooltip('Salida');
+  if (!p) return;
+  if (modo === 'mapa') {
+    marcadorSalida = L.marker(p, { draggable: true, autoPan: true, zIndexOffset: 2000, icon: iconoSalida('eleccion') })
+      .addTo(mapa).bindTooltip('Salida elegida: arrástrala para ajustarla');
+    marcadorSalida.on('dragend', () => { const ll = marcadorSalida.getLatLng(); fijarPuntoMapa([ll.lat, ll.lng]); });
+  } else if (!estado.ruta || distM(p, [estado.ruta.salida.lat, estado.ruta.salida.lon]) > 30) {
+    marcadorSalida = L.marker(p, { icon: iconoSalida() }).addTo(mapa).bindTooltip(modo === 'dgt' ? `${CENTRO_DGT.nombre}, ${CENTRO_DGT.direccion}` : 'Tu ubicación');
+  }
+}
+
+// Fija la salida elegida por el usuario y consulta la calle donde empezará la ruta.
+let consultaCalle = 0;
+async function fijarPuntoMapa(p) {
+  if (!dentro(p[0], p[1], zonasSeleccionadas())) {
+    aviso('Ese punto está fuera de las zonas seleccionadas.');
+    actualizarSalida();
+    return;
+  }
+  estado.puntoMapa = p;
+  estado.calleMapa = null;
+  actualizarSalida();
+  const id = ++consultaCalle;
+  try {
+    const c = await masCercano(p);
+    if (id === consultaCalle) { estado.calleMapa = c; actualizarSalida(); }
+  } catch {
+    if (id === consultaCalle) { estado.calleMapa = { nombre: '', distancia: 0 }; actualizarSalida(); }
+  }
+}
+
+// Búsqueda de direcciones con Nominatim (OpenStreetMap), limitada a las zonas seleccionadas.
+async function buscarDireccion(texto) {
+  const q = texto.trim();
+  const ul = $('#resultados');
+  if (q.length < 3) { ul.innerHTML = '<li class="nada">Escribe al menos 3 letras.</li>'; return; }
+  const zonas = zonasSeleccionadas();
+  if (!zonas.length) { ul.innerHTML = '<li class="nada">Marca al menos una zona.</li>'; return; }
+  const b = zonas.reduce((a, z) => ({
+    minLat: Math.min(a.minLat, z.bbox.minLat), maxLat: Math.max(a.maxLat, z.bbox.maxLat),
+    minLon: Math.min(a.minLon, z.bbox.minLon), maxLon: Math.max(a.maxLon, z.bbox.maxLon),
+  }), { minLat: 90, maxLat: -90, minLon: 180, maxLon: -180 });
+  ul.innerHTML = '<li class="nada">Buscando...</li>';
+  const params = new URLSearchParams({
+    q, format: 'jsonv2', limit: '8', countrycodes: 'es', 'accept-language': 'es', bounded: '1',
+    viewbox: `${b.minLon},${b.maxLat},${b.maxLon},${b.minLat}`,
+  });
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?${params}`);
+    const datos = await r.json();
+    const dentroZona = datos.filter((x) => dentro(Number(x.lat), Number(x.lon), zonas));
+    if (!dentroZona.length) { ul.innerHTML = '<li class="nada">Sin resultados dentro de las zonas seleccionadas.</li>'; return; }
+    ul.innerHTML = '';
+    for (const x of dentroZona) {
+      const li = document.createElement('li');
+      li.textContent = x.display_name.split(',').slice(0, 3).join(',');
+      li.addEventListener('click', () => {
+        const p = [Number(x.lat), Number(x.lon)];
+        ul.innerHTML = '';
+        mapa.setView(p, 17);
+        fijarPuntoMapa(p);
+      });
+      ul.appendChild(li);
+    }
+  } catch {
+    ul.innerHTML = '<li class="nada">No se ha podido buscar. Comprueba la conexión.</li>';
   }
 }
 

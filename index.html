@@ -29,13 +29,28 @@
         <p class="ayuda">Con varias zonas marcadas, la ruta recorre al menos dos municipios. Marca solo una para practicar dentro de esa ciudad.</p>
 
         <h2><span class="num">2</span>Punto de salida</h2>
-        <div class="segmentado" role="radiogroup" aria-label="Punto de salida">
-          <button data-salida="centro" class="activo">Centro</button>
-          <button data-salida="gps">Mi ubicación</button>
-          <button data-salida="mapa">En el mapa</button>
+        <div class="opciones-salida" role="radiogroup" aria-label="Punto de salida">
+          <button data-salida="dgt" class="activo" role="radio">
+            <strong>Centro de exámenes DGT</strong>
+            <span>Av. Europa, 6, 28806 Alcalá de Henares, Madrid</span>
+          </button>
+          <button data-salida="gps" role="radio">
+            <strong>Mi ubicación</strong>
+            <span>Empieza donde estás ahora (GPS)</span>
+          </button>
+          <button data-salida="mapa" role="radio">
+            <strong>Seleccionar</strong>
+            <span>Elige el punto exacto en el mapa o busca una dirección</span>
+          </button>
         </div>
-        <select id="sel-centro" aria-label="Municipio de salida"></select>
-        <p id="info-salida" class="ayuda"></p>
+        <div id="selector-salida" hidden>
+          <form id="form-buscar" class="buscador" role="search">
+            <input type="search" id="txt-buscar" placeholder="Busca una dirección o lugar" aria-label="Buscar dirección" autocomplete="off">
+            <button type="submit">Buscar</button>
+          </form>
+          <ul id="resultados" class="resultados"></ul>
+        </div>
+        <p id="info-salida" class="info-salida"></p>
 
         <h2><span class="num">3</span>Duración</h2>
         <div class="segmentado" role="radiogroup" aria-label="Duración">

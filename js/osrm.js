@@ -28,6 +28,13 @@ async function pedir(url, signal) {
   return datos;
 }
 
+// Punto de la red viaria más cercano (donde empezará realmente la ruta) y nombre de la calle.
+export async function masCercano(p, signal) {
+  const d = await pedir(`${OSRM_URL}/nearest/v1/driving/${aTexto([p])}?number=1`, signal);
+  const w = d.waypoints[0];
+  return { nombre: w.name || '', distancia: w.distance, punto: [w.location[1], w.location[0]] };
+}
+
 // Circuito optimizado (problema del viajante) que sale y vuelve al primer punto.
 // puntos: [[lat, lon], ...]
 export async function viajeCircular(puntos, signal) {

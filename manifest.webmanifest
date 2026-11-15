@@ -1,0 +1,14 @@
+{
+  "name": "PractiRuta Moto",
+  "short_name": "PractiRuta",
+  "description": "Rutas aleatorias para practicar el examen práctico de moto en el corredor del Henares.",
+  "lang": "es",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14213d",
+  "theme_color": "#14213d",
+  "icons": [
+    { "src": "icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

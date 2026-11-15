@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PractiRuta Moto</title>
+  <meta name="description" content="Rutas aleatorias para practicar el examen práctico de moto en Alcalá de Henares, Torrejón de Ardoz, Coslada y San Fernando de Henares.">
+  <meta name="theme-color" content="#14213d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icono.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="panel" aria-label="Panel de rutas">
+      <button id="asa" class="asa" aria-label="Mostrar u ocultar el panel"><span></span></button>
+      <header class="marca">
+        <img src="icono.svg" alt="" width="40" height="40">
+        <div>
+          <h1>PractiRuta Moto</h1>
+          <p>Rutas aleatorias para practicar el examen práctico</p>
+        </div>
+      </header>
+
+      <section class="tarjeta" id="sec-config">
+        <h2><span class="num">1</span>Zonas</h2>
+        <div id="zonas" class="chips"></div>
+        <p class="ayuda">Con varias zonas marcadas, la ruta recorre al menos dos municipios. Marca solo una para practicar dentro de esa ciudad.</p>
+
+        <h2><span class="num">2</span>Punto de salida</h2>
+        <div class="segmentado" role="radiogroup" aria-label="Punto de salida">
+          <button data-salida="centro" class="activo">Centro</button>
+          <button data-salida="gps">Mi ubicación</button>
+          <button data-salida="mapa">En el mapa</button>
+        </div>
+        <select id="sel-centro" aria-label="Municipio de salida"></select>
+        <p id="info-salida" class="ayuda"></p>
+
+        <h2><span class="num">3</span>Duración</h2>
+        <div class="segmentado" role="radiogroup" aria-label="Duración">
+          <button data-dur="30">30 min</button>
+          <button data-dur="45">45 min</button>
+          <button data-dur="60" class="activo">60 min</button>
+          <button data-dur="90">90 min</button>
+        </div>
+        <label class="campo">Ajuste por tráfico
+          <select id="sel-ajuste">
+            <option value="0">Sin ajuste (estimación del router)</option>
+            <option value="0.15">+15 % (tráfico normal)</option>
+            <option value="0.3">+30 % (hora punta)</option>
+          </select>
+        </label>
+        <button id="btn-generar" class="principal">Generar ruta aleatoria</button>
+        <div id="progreso" class="progreso" hidden><div class="barra"><span></span></div><p></p></div>
+      </section>
+
+      <section class="tarjeta" id="sec-ruta" hidden>
+        <div class="cabecera-ruta">
+          <h2 id="titulo-ruta">Tu ruta</h2>
+          <span id="etiqueta-ajuste" class="etiqueta"></span>
+        </div>
+        <div class="cifras">
+          <div><strong id="st-dur">-</strong><span>duración</span></div>
+          <div><strong id="st-dist">-</strong><span>distancia</span></div>
+          <div><strong id="st-rot">-</strong><span>rotondas</span></div>
+          <div><strong id="st-izq">-</strong><span>giros izq.</span></div>
+          <div><strong id="st-der">-</strong><span>giros dcha.</span></div>
+          <div><strong id="st-inc">-</strong><span>incorporaciones</span></div>
+        </div>
+        <div id="reparto" class="reparto"></div>
+        <p id="vias" class="ayuda"></p>
+        <div class="acciones">
+          <button id="btn-navegar" class="principal">Iniciar navegación</button>
+          <button id="btn-simular">Simular recorrido</button>
+          <button id="btn-guardar">Guardar</button>
+          <button id="btn-gpx">Exportar GPX</button>
+          <button id="btn-gmaps">Google Maps (aprox.)</button>
+        </div>
+        <details id="det-pasos" open>
+          <summary>Indicaciones paso a paso (<span id="n-pasos">0</span>)</summary>
+          <ol id="pasos" class="pasos"></ol>
+        </details>
+      </section>
+
+      <section class="tarjeta" id="sec-guardadas">
+        <h2>Mis rutas</h2>
+        <ul id="lista-rutas" class="lista-rutas"></ul>
+      </section>
+
+      <footer class="nota">
+        Practica siempre cumpliendo la normativa y con el móvil en un soporte: no lo manipules en marcha. Las duraciones son estimaciones sin tráfico.
+        Mapa y datos © colaboradores de OpenStreetMap. Rutas: OSRM.
+      </footer>
+    </aside>
+
+    <main id="zona-mapa">
+      <div id="mapa"></div>
+      <button id="btn-centrar" class="flotante" title="Centrar en mi posición" aria-label="Centrar en mi posición" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
+
+      <div id="nav-banner" class="nav-banner" hidden>
+        <div class="nav-icono" id="nav-icono"></div>
+        <div class="nav-texto">
+          <strong id="nav-dist">-</strong>
+          <span id="nav-instr">-</span>
+          <small id="nav-despues"></small>
+        </div>
+      </div>
+      <div id="nav-inferior" class="nav-inferior" hidden>
+        <div class="nav-resumen">
+          <strong id="nav-restante">-</strong>
+          <span id="nav-restante-km">-</span>
+        </div>
+        <div class="nav-progreso"><span id="nav-barra"></span></div>
+        <div class="nav-botones">
+          <button id="btn-voz" title="Voz" aria-label="Activar o silenciar la voz">Voz: sí</button>
+          <select id="sel-vel" title="Velocidad de simulación" aria-label="Velocidad de simulación" hidden>
+            <option value="1">x1</option>
+            <option value="5" selected>x5</option>
+            <option value="15">x15</option>
+          </select>
+          <button id="btn-parar" class="peligro">Finalizar</button>
+        </div>
+      </div>
+      <div id="aviso" class="aviso" role="status" hidden></div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
